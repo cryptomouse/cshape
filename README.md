@@ -44,6 +44,12 @@ int add(int a, int b) {
 starts with a blank line by default, so `.strip()` if you're printing a
 single node standalone rather than concatenating several.)
 
+## Documentation
+
+- [docs/api.md](docs/api.md) - documentation index
+- [docs/quickstart.md](docs/quickstart.md) - getting started and first example
+- [docs/reference.md](docs/reference.md) - current API reference
+
 ## What it covers
 
 - Types: named types, pointers, arrays, function types, structs/unions, enums
@@ -59,6 +65,9 @@ single node standalone rather than concatenating several.)
 - A `.mark` field on every node: set it to any string and it shows up as a
   `/*mark*/` comment right before that node in the output — useful for
   tracing which part of your own compiler/generator produced which bit of C
+- A `.note` field on every value, printed as a `/* note */` comment *after*
+  the value — for saying where a value came from once it no longer shows:
+  `3.125 /* totalVolume / elementVolume */`
 
 ## What it doesn't do
 

@@ -1,8 +1,9 @@
 import unittest
 
 from cshape import (
-	CField, CStmtBlock, CStmtDefFunc, CStmtReturn, CTypeFunction, CTypeIdentifier,
-	CValueAdd, CValueIdentifier, render,
+	CField, CStmtBlock, CStmtDefFunc, CStmtDefVar, CStmtReturn, CTypeArray,
+	CTypeFunction, CTypeIdentifier, CValueAdd, CValueArray, CValueIdentifier,
+	CValueInteger, render,
 )
 
 
@@ -35,6 +36,21 @@ class SmokeTest(unittest.TestCase):
 		v = CValueIdentifier('x')
 		v.mark = 'debug-note'
 		self.assertIn('/*debug-note*/', render(v))
+
+	def test_value_constructor_accepts_nl_for_array_layout(self):
+		array_def = CStmtDefVar(
+			id='numbers',
+			type=CTypeArray(CTypeIdentifier('int')),
+			initializer=CValueArray([
+				CValueInteger(1, nl=1),
+				CValueInteger(2),
+			]),
+		)
+
+		self.assertEqual(
+			render(array_def).strip(),
+			'int numbers[] = {\n\t1, 2\n};',
+		)
 
 
 if __name__ == '__main__':
