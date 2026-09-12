@@ -16,8 +16,9 @@ pip install cshape
 
 ## Example
 
-A typedef'd struct, a function that walks an array of them, and a `.mark`
-on one statement to show where it came from:
+A typedef'd struct, a static table of them, a function that walks the table
+(with a `.mark` on one statement to show where it came from), and a `main`
+that prints the result:
 
 ```python
 from cshape import *
@@ -31,6 +32,17 @@ point = CStmtDefType(
 	type=CTypeStruct(tag="struct", fields=[
 		CField(id="x", type=i32, nl=1),
 		CField(id="y", type=i32, nl=1),
+	]),
+)
+
+points = CStmtDefVar(
+	id="points",
+	storage_class="static",
+	type=CTypeArray(CTypeIdentifier("Point"), specifiers=["const"]),
+	initializer=CValueArray([
+		CValueArray([CValueInteger(3), CValueInteger(1)], nl=1),
+		CValueArray([CValueInteger(-4), CValueInteger(0)], nl=1),
+		CValueArray([CValueInteger(5), CValueInteger(9)], nl=1),
 	]),
 )
 
@@ -59,19 +71,42 @@ sum_x = CStmtDefFunc(
 	]),
 )
 
-unit = [CInclude("stdint.h", True), point, sum_x]
-print("\n\n".join(render(node).strip() for node in unit))
+count = CValueDiv(CValueSizeofValue(CValueIdentifier("points")),
+                  CValueSizeofValue(CValueIndex(CValueIdentifier("points"), CValueInteger(0))))
+
+main = CStmtDefFunc(
+	id="main",
+	type=CTypeFunction(params=[], to=CTypeIdentifier("int")),
+	block=CStmtBlock([
+		CStmtExpr(CValueCall(CValueIdentifier("printf"), [
+			CValueString("sum of x: %d\\n", 8),
+			CValueCall(CValueIdentifier("sum_x"), [CValueIdentifier("points"), count]),
+		])),
+		CStmtReturn(CValueInteger(0)),
+	]),
+)
+
+point.nl = points.nl = 2  # blank line before, like CStmtDefFunc has by default
+unit = [CInclude("stdint.h", True), CInclude("stdio.h", True), point, points, sum_x, main]
+print("".join(render(node) for node in unit).strip())
 ```
 
 Generated C:
 
 ```c
 #include <stdint.h>
+#include <stdio.h>
 
 typedef struct {
 	int32_t x;
 	int32_t y;
 } Point;
+
+static const Point points[] = {
+	{3, 1},
+	{-4, 0},
+	{5, 9}
+};
 
 int32_t sum_x(const Point *pts, int n) {
 	int32_t acc = 0;
@@ -84,17 +119,24 @@ int32_t sum_x(const Point *pts, int n) {
 	}
 	return acc;
 }
+
+int main(void) {
+	printf("sum of x: %d\n", sum_x(points, sizeof points / sizeof points[0]));
+	return 0;
+}
 ```
 
-(`render()` returns the node's own leading blank lines too — `CStmtDefFunc`
-starts with a blank line by default, so `.strip()` if you're printing a
-single node standalone rather than concatenating several.)
+(`render()` returns the node's own leading blank lines too — that's the
+`nl` field: `CStmtDefFunc` starts with two line breaks, other statements
+with one, so concatenating the rendered nodes gives you the layout above.
+`.strip()` once at the end, or per node if you're printing one standalone.)
 
 ## Documentation
 
 - [docs/api.md](docs/api.md) - documentation index
 - [docs/quickstart.md](docs/quickstart.md) - getting started and first example
 - [docs/reference.md](docs/reference.md) - current API reference
+- [docs/BUGS.md](docs/BUGS.md) - known bugs, `BUG#N`
 
 ## What it covers
 

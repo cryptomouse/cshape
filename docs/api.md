@@ -6,6 +6,7 @@ This page is the entry point for the current `cshape` documentation set.
 
 - [Quickstart](quickstart.md): install, mental model, first example, rendering basics.
 - [Reference](reference.md): current public classes, constructor signatures, and behavior notes.
+- [Known Bugs](BUGS.md): where the printer does not do what these docs say; referred to as `BUG#N` everywhere.
 
 ## Which One To Read
 
