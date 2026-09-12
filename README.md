@@ -16,27 +16,73 @@ pip install cshape
 
 ## Example
 
+A typedef'd struct, a function that walks an array of them, and a `.mark`
+on one statement to show where it came from:
+
 ```python
 from cshape import *
 
-func = CStmtDefFunc(
-	id="add",
-	type=CTypeFunction(
-		params=[CField(id="a", type=CTypeIdentifier("int")),
-		        CField(id="b", type=CTypeIdentifier("int"))],
-		to=CTypeIdentifier("int"),
-	),
-	block=CStmtBlock([
-		CStmtReturn(CValueAdd(CValueIdentifier("a"), CValueIdentifier("b"))),
+i32 = CTypeIdentifier("int32_t")
+pts, n, i, acc = (CValueIdentifier(x) for x in ("pts", "n", "i", "acc"))
+pt_x = CValueFieldAccess(CValueIndex(pts, i), "x")
+
+point = CStmtDefType(
+	id="Point",
+	type=CTypeStruct(tag="struct", fields=[
+		CField(id="x", type=i32, nl=1),
+		CField(id="y", type=i32, nl=1),
 	]),
 )
 
-print(render(func).strip())
+skip_negative = CStmtIf(
+	condition=CValueGE(pt_x, CValueInteger(0)),
+	then_block=CStmtBlock([CStmtAssignment(acc, CValueAdd(acc, pt_x))]),
+	else_block=None,
+)
+skip_negative.mark = "gen:filter"
+
+sum_x = CStmtDefFunc(
+	id="sum_x",
+	type=CTypeFunction(
+		params=[CField(id="pts", type=CTypePointer(CTypeIdentifier("Point", ["const"]))),
+		        CField(id="n", type=CTypeIdentifier("int"))],
+		to=i32,
+	),
+	block=CStmtBlock([
+		CStmtDefVar(id="acc", type=i32, initializer=CValueInteger(0)),
+		CStmtDefVar(id="i", type=CTypeIdentifier("int"), initializer=CValueInteger(0)),
+		CStmtWhile(
+			condition=CValueLt(i, n),
+			block=CStmtBlock([skip_negative, CStmtIncrement(i)]),
+		),
+		CStmtReturn(acc),
+	]),
+)
+
+unit = [CInclude("stdint.h", True), point, sum_x]
+print("\n\n".join(render(node).strip() for node in unit))
 ```
 
+Generated C:
+
 ```c
-int add(int a, int b) {
-	return a + b;
+#include <stdint.h>
+
+typedef struct {
+	int32_t x;
+	int32_t y;
+} Point;
+
+int32_t sum_x(const Point *pts, int n) {
+	int32_t acc = 0;
+	int i = 0;
+	while (i < n) {
+		/*gen:filter*/if (pts[i].x >= 0) {
+			acc = acc + pts[i].x;
+		}
+		++i;
+	}
+	return acc;
 }
 ```
 
