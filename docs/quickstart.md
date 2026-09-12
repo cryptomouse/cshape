@@ -62,7 +62,7 @@ render(node, style='legacy', indent='\t', newline='\n')
 - `indent` controls one indentation unit.
 - `newline` controls the newline sequence.
 
-`render()` preserves mark comments and operator precedence handling. Some statement and definition nodes intentionally include their own leading blank lines, so `.strip()` is often convenient when rendering a single node standalone.
+`render()` prints the node's position (its leading line break and indentation, per the `nl` field), then its mark comment, then the node itself, so a mark always lands right before the code it marks. Statements and definitions therefore come out with leading blank lines, and `.strip()` is often convenient when rendering a single node standalone.
 
 ## Core Conventions
 

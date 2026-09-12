@@ -2,8 +2,8 @@ import unittest
 
 from cshape import (
 	CField, CStmtBlock, CStmtDefFunc, CStmtDefVar, CStmtReturn, CTypeArray,
-	CTypeFunction, CTypeIdentifier, CValueAdd, CValueArray, CValueIdentifier,
-	CValueInteger, render,
+	CTypeFunction, CTypeIdentifier, CTypeStruct, CValueAdd, CValueArray,
+	CValueIdentifier, CValueInteger, render,
 )
 
 
@@ -50,6 +50,24 @@ class SmokeTest(unittest.TestCase):
 		self.assertEqual(
 			render(array_def).strip(),
 			'int numbers[] = {\n\t1, 2\n};',
+		)
+
+	def test_struct_attributes_follow_the_closing_brace(self):
+		# a struct attribute is only read after the body: before the
+		# declaration the compiler ignores it
+		packed = CStmtDefVar(
+			id='',
+			type=CTypeStruct(
+				fields=[CField(id='tag', type=CTypeIdentifier('uint8_t')),
+				        CField(id='len', type=CTypeIdentifier('uint32_t'))],
+				tag='struct header',
+				attributes={'packed': {}},
+			),
+		)
+
+		self.assertEqual(
+			render(packed).strip(),
+			'struct header {uint8_t tag; uint32_t len;} __attribute__((packed));',
 		)
 
 

@@ -247,11 +247,12 @@ class CTypeFunction(CType):
 
 
 class CTypeStruct(CType):
-	def __init__(self, fields, tag, specifiers=None):
+	def __init__(self, fields, tag, specifiers=None, attributes=None):
 		super().__init__()
 		self.fields = fields
 		self.tag = tag
 		self.specifiers = specifiers if specifiers != None else []
+		self.attributes = attributes
 		self.precedence = 0
 
 	def to_str(self, text='', with_qualifiers=True):
@@ -282,7 +283,13 @@ class CTypeStruct(CType):
 		else:
 			sstr += 'uint8_t __placeholder;'
 		indent_down()
-		sstr += str_nl_indent(nl_end) + '}' + with_space(text)
+		sstr += str_nl_indent(nl_end) + '}'
+		# атрибуты типа печатаем после закрывающей скобки, а не перед
+		# декларацией: в префиксной позиции компилятор их у struct/union
+		# игнорирует ("attribute is ignored, place it after struct"),
+		# а эта работает всюду - и в определении, и в typedef, и у поля
+		sstr += with_space(str_gcc_attributes(self.attributes).strip())
+		sstr += with_space(text)
 		return sstr
 
 
@@ -386,6 +393,14 @@ class KV():
 		self.key = key
 		self.value = value
 		self.nl = nl
+		self.mark = None
+
+
+def str_kv(x):
+	sstr = ".%s = %s" % (x.key, str_cvalue(x.value))
+	if x.mark != None:
+		sstr = '/*%s*/' % x.mark + sstr
+	return sstr
 
 
 class CValue():
@@ -535,7 +550,7 @@ class CValueStruct(CValue):
 				if item.nl == 0:
 					s_items += " "
 			s_items += str_nl_indent(item.nl)
-			s_items += ".%s = %s" % (item.key, str_cvalue(item.value))
+			s_items += str_kv(item)
 			i += 1
 
 		indent_down()
@@ -1090,7 +1105,10 @@ class CValueStringConcat(CValue):
 def str_cvalue(v, ext_precedence=0):
 	assert(isinstance(v, CValue))
 	y = str(v)
-	sstr = wrap_if(y, (v.precedence < ext_precedence) or v.mark and (v.precedence < valuePrecedenceMax))
+	# (!) mark сам по себе скобок не ставит. Комментарий в C лексически
+	# прозрачен, а скобки - нет: отладочная пометка, меняющая
+	# сгенерированный код, перестает быть наблюдением за ним
+	sstr = wrap_if(y, v.precedence < ext_precedence)
 	if v.mark != None:
 		sstr = '/*%s*/' % v.mark + sstr
 	return sstr
@@ -1101,15 +1119,13 @@ def str_cvalue(v, ext_precedence=0):
 
 def str_cstmt(x):
 	assert(x != None)
-	sstr = ''
-	#if x.comment != None:
-	#	sstr += str_nl_indent(x.comment.nl)
-	#	print_comment(x.comment)
-	#sstr += str_nl_indent(x.nl)
-	sstr += str(x)
+	# (!) перевод строки и отступ печатает обертка, а не сам узел: пометка
+	# относится к коду, а не к пустому месту перед ним, и должна встать
+	# между отступом и кодом - иначе она уезжает в конец предыдущей строки
+	sstr = str_nl_indent(x.nl)
 	if x.mark != None:
-		sstr = '/*%s*/' % x.mark + sstr
-	return sstr
+		sstr += '/*%s*/' % x.mark
+	return sstr + str(x)
 
 
 class CStmt():
@@ -1129,7 +1145,6 @@ class CStmtLineComment(CStmt):
 
 	def __str__(self):
 		sstr = ''
-		sstr += str_nl_indent(self.nl)
 		n = len(self.lines)
 		i = 0
 		while i < n:
@@ -1149,8 +1164,7 @@ class CStmtBlockComment(CStmt):
 		self.nl = 1
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "/*%s*/" % self.text
+		sstr = "/*%s*/" % self.text
 		return sstr
 
 
@@ -1182,8 +1196,7 @@ class CStmtExpr(CStmt):
 		self.nl = 1
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		return sstr + str_cvalue(self.value) + ';'
+		return str_cvalue(self.value) + ';'
 
 
 class CStmtAssignment(CStmt):
@@ -1195,8 +1208,7 @@ class CStmtAssignment(CStmt):
 		self.rvalue = rvalue
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		return sstr + "%s = %s;" % (str_cvalue(self.lvalue), str_cvalue(self.rvalue))
+		return "%s = %s;" % (str_cvalue(self.lvalue), str_cvalue(self.rvalue))
 
 
 class CStmtIncrement(CStmt):
@@ -1206,7 +1218,7 @@ class CStmtIncrement(CStmt):
 		self.value = value
 
 	def __str__(self):
-		return str_nl_indent(self.nl) + "++%s;" % str_cvalue(self.value)
+		return "++%s;" % str_cvalue(self.value)
 
 
 class CStmtDecrement(CStmt):
@@ -1216,7 +1228,7 @@ class CStmtDecrement(CStmt):
 		self.value = value
 
 	def __str__(self):
-		return str_nl_indent(self.nl) + "--%s;" % str_cvalue(self.value)
+		return "--%s;" % str_cvalue(self.value)
 
 
 class CStmtDeclType(CStmt):
@@ -1227,8 +1239,7 @@ class CStmtDeclType(CStmt):
 		self.attributes = attributes
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += str_gcc_attributes(self.attributes)
+		sstr = str_gcc_attributes(self.attributes)
 		sstr += str_ctype(self.type) + ';'
 		return sstr
 
@@ -1243,8 +1254,7 @@ class CStmtDefType(CStmt):
 		self.attributes = attributes
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += str_gcc_attributes(self.attributes)
+		sstr = str_gcc_attributes(self.attributes)
 		sstr += 'typedef %s;' % self.type.to_str(text=self.id)
 		return sstr
 
@@ -1264,11 +1274,10 @@ class CStmtDefVar(CStmt):
 		self.attributes = attributes
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += str_gcc_attributes(self.attributes)
+		sstr = str_gcc_attributes(self.attributes)
 		if self.storage not in (None, ''):
 			sstr += self.storage + ' '
-		#mass
+
 		sstr += str_ctype(self.type, text=self.id)
 		if self.initializer != None:
 			sstr += ' = %s' % str_cvalue(self.initializer)
@@ -1292,8 +1301,7 @@ class CStmtDefFunc(CStmt):
 		self.nl = 2
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += str_gcc_attributes(self.attributes)
+		sstr = str_gcc_attributes(self.attributes)
 		if self.storage not in (None, ''):
 			sstr += self.storage + ' '
 		sstr += self.type.to_str(text=self.id)
@@ -1320,13 +1328,12 @@ class CStmtIf(CStmt):
 		self.else_block = else_block
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "if (%s)" % str_cvalue(self.condition)
+		sstr = "if (%s)" % str_cvalue(self.condition)
 		if styleguide['LINE_BREAK_BEFORE_BLOCK_BRACE']:
 			sstr += str_nl_indent()
 		else:
 			sstr += ' '
-		sstr += str(self.then_block)
+		sstr += str_cstmt(self.then_block)
 		if self.else_block != None:
 			if styleguide['LINE_BREAK_BEFORE_BLOCK_BRACE']:
 				sstr += str_nl_indent()
@@ -1337,7 +1344,7 @@ class CStmtIf(CStmt):
 				sstr += str_nl_indent()
 			else:
 				sstr += ' '
-			sstr += str(self.else_block)
+			sstr += str_cstmt(self.else_block)
 		return sstr
 
 
@@ -1350,13 +1357,12 @@ class CStmtWhile(CStmt):
 		self.block = block
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "while (%s)" % str_cvalue(self.condition)
+		sstr = "while (%s)" % str_cvalue(self.condition)
 		if styleguide['LINE_BREAK_BEFORE_BLOCK_BRACE']:
 			sstr += str_nl_indent()
 		else:
 			sstr += ' '
-		sstr += str(self.block)
+		sstr += str_cstmt(self.block)
 		return sstr
 
 
@@ -1368,8 +1374,7 @@ class CStmtReturn(CStmt):
 		self.return_value = return_value
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += 'return'
+		sstr = 'return'
 		if self.return_value != None:
 			sstr += ' ' + str_cvalue(self.return_value)
 		return sstr + ";"
@@ -1381,8 +1386,7 @@ class CStmtBreak(CStmt):
 		pass
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "break;"
+		sstr = "break;"
 		return sstr
 
 
@@ -1392,8 +1396,7 @@ class CStmtContinue(CStmt):
 		pass
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "continue;"
+		sstr = "continue;"
 		return sstr
 
 
@@ -1415,8 +1418,7 @@ class CStmtInlineAsm(CStmt):
 
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "__asm__ volatile ("
+		sstr = "__asm__ volatile ("
 		sstr += '"%s" ' % self.text.replace('\n', '\\n\\\n')
 
 		sstr += ":"
@@ -1446,6 +1448,7 @@ class CStmtInlineAsm(CStmt):
 class CRawText(CStmt):
 	def __init__(self, text):
 		super().__init__()
+		self.nl = 0  # сырой текст печатается как есть, без отступа
 		self.text = text
 		pass
 
@@ -1465,8 +1468,7 @@ class CMacroDef():
 		self.mark = None
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "#define %s" % (self.id)
+		sstr = "#define %s" % (self.id)
 		if self.text:
 			sstr += ' ' + self.text
 		return sstr
@@ -1483,9 +1485,8 @@ class CMacroDefValue():
 		self.mark = None
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
 		set_nl_symbol(" \\\n")
-		sstr += "#define %s %s" % (self.id, str_cvalue(self.value, ext_precedence=valuePrecedenceMax))
+		sstr = "#define %s %s" % (self.id, str_cvalue(self.value, ext_precedence=valuePrecedenceMax))
 		set_nl_symbol("\n")
 		return sstr
 
@@ -1499,8 +1500,7 @@ class CMacroUndef():
 		self.mark = None
 
 	def __str__(self):
-		sstr = str_nl_indent(self.nl)
-		sstr += "#undef %s" % (self.text)
+		sstr = "#undef %s" % (self.text)
 		return sstr
 
 
@@ -1515,20 +1515,22 @@ class CInclude():
 		self.mark = None
 
 	def __str__(self):
-		#sstr = str_nl_indent(self.nl)
 		if self.is_system:
-			return "\n#include <%s>" % self.text
-		return "\n#include \"%s\"" % self.text
+			return "#include <%s>" % self.text
+		return "#include \"%s\"" % self.text
 
 
 def str_cdef(x):
-	prefix = '/*%s*/' % x.mark if x.mark else ''
-	return prefix + str(x)
+	sstr = str_nl_indent(x.nl)
+	if x.mark != None:
+		sstr += '/*%s*/' % x.mark
+	return sstr + str(x)
 
 
 # pairs = ("macro text", [<defs>])
 class CConditionalRegion():
 	def __init__(self, pairs, _else=None):
+		self.nl = 1
 		self.pairs = pairs
 		self._else = _else
 		self.mark = None
@@ -1540,7 +1542,8 @@ class CConditionalRegion():
 #			if directive == '#if':
 #				ss = pair[0].split('()')
 #				print(ss)
-			sstr += "\n%s %s" % (directive, pair[0])
+			# ведущий перевод строки печатает обертка, как и у всех узлов
+			sstr += "%s%s %s" % ('' if sstr == '' else '\n', directive, pair[0])
 #			if len(pair[1]) > 5:
 #				sstr += "\n"
 			for xd in pair[1]:

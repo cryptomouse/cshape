@@ -59,11 +59,14 @@ CTypeFunction(params, to, size=None, extra_args=False, specifiers=None)
 ### `CTypeStruct`
 
 ```python
-CTypeStruct(fields, tag, specifiers=None)
+CTypeStruct(fields, tag, specifiers=None, attributes=None)
 ```
 
 - Struct or union-like body printer, depending on the `tag` text you provide.
 - `fields` is a list of `CField`.
+- `attributes` is a mapping printed after the closing brace — `struct s { ... }
+  __attribute__((packed))`. That is the position a compiler reads for a
+  struct or union type; before the declaration it is ignored.
 
 ### `CEnumItem`
 
@@ -170,6 +173,7 @@ KV(key, value, nl)
 ```
 
 - Small helper used by `CValueStruct` for designated initializer entries.
+- `mark` is emitted as a `/*mark*/` comment before the entry: `{/*mark*/.key = value}`.
 
 ## Statements And Definitions
 
@@ -254,11 +258,11 @@ render(node, style='legacy', indent='\t', newline='\n')
 - `indent` controls one indentation unit.
 - `newline` controls the newline sequence.
 
-`render()` preserves mark comments and operator precedence handling. When rendering a standalone statement or definition, remember that some nodes intentionally include their own leading blank lines.
+`render()` prints the node's position (its leading line break and indentation, per the `nl` field), then its mark comment, then the node itself, so a mark always lands right before the code it marks. When rendering a standalone statement or definition, remember that it comes with those leading blank lines.
 
 ## Attributes
 
-Some declaration and definition nodes accept an `attributes` mapping consumed by the internal GCC attribute printer. Currently recognized keys include:
+Some declaration and definition nodes, and `CTypeStruct`, accept an `attributes` mapping consumed by the internal GCC attribute printer. Currently recognized keys include:
 
 - `inline`
 - `noinline`
@@ -271,7 +275,8 @@ Some declaration and definition nodes accept an `attributes` mapping consumed by
 - `alignment`
 - `optimize`
 
-These are emitted as GCC-style `__attribute__((...))` annotations.
+These are emitted as GCC-style `__attribute__((...))` annotations, before the
+declaration for a statement node and after the closing brace for `CTypeStruct`.
 
 ## Notes
 
