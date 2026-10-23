@@ -120,13 +120,13 @@ def str_gcc_attributes(attributes):
 	atts = []
 	for anno_name in attributes:
 		#print(":anno:" + anno_name)
-		asset = attributes[anno_name]
+		a = attributes[anno_name]
 		if anno_name in gcc_attributes:
 			gcc_att_name = gcc_attributes[anno_name]
 
 			att_arg = ""
-			if asset != {}:
-				att_arg = asset.asset
+			if a:
+				att_arg = a.asset
 				if isinstance(att_arg, str):
 					att_arg = '"%s"' % att_arg
 				att_arg = '(' + str(att_arg) + ')'
@@ -1097,7 +1097,7 @@ class CValueStringConcat(CValue):
 
 	def __str__(self):
 		lx = str_cvalue(self.left, ext_precedence=self.precedence)
-		rx = str_cvalue(self.right, ext_precedence=self.precedence + 1)
+		rx = str_cvalue(self.right, ext_precedence=self.precedence)
 		return lx + ' ' + rx
 
 
@@ -1229,6 +1229,24 @@ class CStmtDecrement(CStmt):
 
 	def __str__(self):
 		return "--%s;" % str_cvalue(self.value)
+
+
+compound_assignment_ops = ('+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=')
+
+
+# `lvalue op= rvalue`: the operator is passed whole, e.g. '+=' or '<<='
+class CStmtCompoundAssignment(CStmt):
+	def __init__(self, lvalue, op, rvalue):
+		assert(isinstance(lvalue, CValue))
+		assert(op in compound_assignment_ops)
+		assert(isinstance(rvalue, CValue))
+		super().__init__()
+		self.lvalue = lvalue
+		self.op = op
+		self.rvalue = rvalue
+
+	def __str__(self):
+		return "%s %s %s;" % (str_cvalue(self.lvalue), self.op, str_cvalue(self.rvalue))
 
 
 class CStmtDeclType(CStmt):

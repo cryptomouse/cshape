@@ -1,9 +1,10 @@
 import unittest
 
 from cshape import (
-	CField, CStmtBlock, CStmtDefFunc, CStmtDefVar, CStmtReturn, CTypeArray,
-	CTypeFunction, CTypeIdentifier, CTypeStruct, CValueAdd, CValueArray,
-	CValueIdentifier, CValueInteger, render,
+	CField, CStmtBlock, CStmtCompoundAssignment, CStmtDefFunc, CStmtDefVar,
+	CStmtReturn, CTypeArray, CTypeFunction, CTypeIdentifier, CTypeStruct,
+	CValueAdd, CValueArray, CValueIdentifier, CValueIndex, CValueInteger,
+	CValueMul, render,
 )
 
 
@@ -69,6 +70,22 @@ class SmokeTest(unittest.TestCase):
 			render(packed).strip(),
 			'struct header {uint8_t tag; uint32_t len;} __attribute__((packed));',
 		)
+
+	def test_compound_assignment(self):
+		x = CValueIdentifier('x')
+		self.assertEqual(
+			render(CStmtCompoundAssignment(x, '+=', CValueInteger(1))).strip(),
+			'x += 1;',
+		)
+		# the right side is a whole expression: no parentheses needed
+		a_i = CValueIndex(CValueIdentifier('a'), CValueIdentifier('i'))
+		rhs = CValueAdd(CValueIdentifier('y'), CValueMul(x, CValueInteger(2)))
+		self.assertEqual(
+			render(CStmtCompoundAssignment(a_i, '<<=', rhs)).strip(),
+			'a[i] <<= y + x * 2;',
+		)
+		with self.assertRaises(AssertionError):
+			CStmtCompoundAssignment(x, '=', CValueInteger(1))
 
 
 if __name__ == '__main__':

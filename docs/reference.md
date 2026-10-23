@@ -191,6 +191,7 @@ CStmtBlock(stmts)
 ```python
 CStmtExpr(value)
 CStmtAssignment(lvalue, rvalue)
+CStmtCompoundAssignment(lvalue, op, rvalue)   # op: '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='
 CStmtIncrement(value)
 CStmtDecrement(value)
 ```
