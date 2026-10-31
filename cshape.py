@@ -386,6 +386,8 @@ def print_list_items(_list, method):
 
 
 valuePrecedenceMax = 15
+# выше любого узла: такой ext_precedence заворачивает в скобки что угодно
+valuePrecedenceAboveMax = valuePrecedenceMax + 1
 
 
 class KV():
@@ -426,7 +428,9 @@ class CValueInteger(CValue):
 		super().__init__(nl=nl)
 		assert(isinstance(number, int))
 		assert(isinstance(as_hex, bool))
-		self.precedence = 15
+		# отрицательное число лексически - унарный минус над литералом, а не
+		# атом: иначе CValueParen снимет с него скобки и `-(-5)` станет `--5`
+		self.precedence = 13 if number < 0 else 15
 		self.number = number
 		self.as_hex = as_hex
 		self.nsigns = nsigns
@@ -679,7 +683,11 @@ class CValueUnaryPlus(CValue):
 		self.precedence = 13
 
 	def __str__(self):
-		return '+%s' % (str_cvalue(self.value, ext_precedence=self.precedence))
+		ext_precedence = self.precedence
+		if isinstance(self.value, CValueUnaryPlus):
+			# Если значение тоже операция плюс - завернем его в скобки
+			ext_precedence = valuePrecedenceAboveMax
+		return '+%s' % (str_cvalue(self.value, ext_precedence=ext_precedence))
 
 
 class CValueUnaryMinus(CValue):
@@ -690,7 +698,11 @@ class CValueUnaryMinus(CValue):
 		self.precedence = 13
 
 	def __str__(self):
-		return '-%s' % (str_cvalue(self.value, ext_precedence=self.precedence))
+		ext_precedence = self.precedence
+		if isinstance(self.value, CValueUnaryMinus) or (isinstance(self.value, CValueInteger) and self.value.number < 0):
+			# Если значение тоже операция минус или отрицательное - завернем его в скобки
+			ext_precedence = valuePrecedenceAboveMax
+		return '-%s' % (str_cvalue(self.value, ext_precedence=ext_precedence))
 
 
 class CValueLogicalNot(CValue):
