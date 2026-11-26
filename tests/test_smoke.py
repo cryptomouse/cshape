@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from cshape import (
 	CField, CStmtBlock, CStmtCompoundAssignment, CStmtDefFunc, CStmtDefVar,
@@ -86,6 +87,30 @@ class SmokeTest(unittest.TestCase):
 		)
 		with self.assertRaises(AssertionError):
 			CStmtCompoundAssignment(x, '=', CValueInteger(1))
+
+	def test_array_qualifiers_go_to_leaf_item(self):
+		# C11 6.7.3p9: an array's qualifiers are its items' qualifiers;
+		# they add to the item's own and reach the innermost item
+		own = CTypeArray(CTypeIdentifier('int', specifiers=['volatile']), CValueInteger(4))
+		self.assertEqual(render(CStmtDefVar('a', own)).strip(), 'volatile int a[4];')
+
+		inner = CTypeArray(CTypeIdentifier('int'), CValueInteger(2))
+		grid = CTypeArray(inner, CValueInteger(2), specifiers=['volatile'])
+		self.assertEqual(render(CStmtDefVar('g', grid)).strip(), 'volatile int g[2][2];')
+
+		grid.specifiers.remove('volatile')
+		self.assertEqual(render(CStmtDefVar('g', grid)).strip(), 'int g[2][2];')
+
+	def test_attribute_keeps_indent_inside_block(self):
+		# the declaration after an attribute keeps the block's indent;
+		# at the top level nothing changes
+		x = CStmtDefVar('x', CTypeIdentifier('int'), initializer=CValueInteger(1),
+		                attributes={'alignment': SimpleNamespace(asset=16)})
+		self.assertEqual(render(x).strip(), '__attribute__((aligned(16)))\nint x = 1;')
+		self.assertEqual(
+			render(CStmtBlock([x])),
+			'{\n\t__attribute__((aligned(16)))\n\tint x = 1;\n}',
+		)
 
 
 if __name__ == '__main__':

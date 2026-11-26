@@ -133,8 +133,12 @@ def str_gcc_attributes(attributes):
 
 			atts.append("%s%s" % (gcc_att_name, str(att_arg)))
 
+	# перевод строки с текущим отступом, иначе внутри блока объявление
+	# после атрибута уезжает в нулевую колонку:
+	#   \t__attribute__((aligned(16)))
+	#   int x;
 	if atts != []:
-		return "__attribute__((" + ", ".join(atts) + "))\n"
+		return "__attribute__((" + ", ".join(atts) + "))" + str_nl_indent()
 
 	return ""
 
@@ -195,13 +199,33 @@ class CTypePointer(CType):
 
 
 class CTypeArray(CType):
-	def __init__(self, item_type, size=None, specifiers=[]):
+	# В C у массива нет своих квалификаторов: `const`/`volatile` массива -
+	# это квалификаторы его элементов (C11 6.7.3p9), а у многомерного - его
+	# листовых (не-массивных) элементов. Поэтому specifiers массива - это
+	# specifiers листа: квалификаторы массива добавляются к собственным
+	# квалификаторам элемента, а не затирают их
+	def __init__(self, item_type, size=None, specifiers=None):
 		super().__init__()
-		item_type.specifiers = specifiers  # array specs is array item specs (!)
 		self.item_type = item_type
 		self.size = size
-		self.specifiers = specifiers if specifiers != None else []
+		for spec in (specifiers or []):
+			if spec not in self.specifiers:
+				self.specifiers.append(spec)
 		self.precedence = 2
+
+	def leaf_type(self):
+		t = self.item_type
+		while isinstance(t, CTypeArray):
+			t = t.item_type
+		return t
+
+	@property
+	def specifiers(self):
+		return self.leaf_type().specifiers
+
+	@specifiers.setter
+	def specifiers(self, specifiers):
+		self.leaf_type().specifiers = list(specifiers)
 
 	def to_str(self, text='', with_qualifiers=True):
 		text = text + '['
